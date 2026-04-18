@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import pickle
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # --- 1. LOAD THE ML BRAIN ---
 @st.cache_resource
@@ -11,29 +13,33 @@ def load_ml_components():
         encoders = pickle.load(f)
     return model, encoders
 
-# Try to load the model
+# --- 2. LOAD THE ANALYTICS ---
+@st.cache_data
+def load_heatmap():
+    # Loading the pre-processed tiny file we created
+    return pd.read_csv('heatmap_data.csv', index_col='Order Region')
+
+# Initial Load
 try:
     model, encoders = load_ml_components()
 except FileNotFoundError:
     st.error("🚨 Model files not found! Make sure you ran 'model_training.py' first.")
     st.stop()
 
-# --- 2. UI SETUP ---
+# --- 3. UI SETUP ---
 st.set_page_config(page_title="AI Supply Chain Risk Dashboard", layout="wide")
 st.title("🌍 AI-Powered Early Warning System")
-st.markdown("This dashboard uses a **Random Forest** model trained on 180,000 DataCo records to predict shipment delays.")
+st.markdown("Predict shipment delays and visualize global systemic risks.")
 
-# --- 3. THE PM INTERFACE (Sidebar) ---
+# --- 4. THE PM INTERFACE (Sidebar) ---
 st.sidebar.header("📦 Shipment Configuration")
-
-# These dropdowns are powered by your real data!
 ship_mode = st.sidebar.selectbox("Shipping Mode", encoders['Shipping Mode'].classes_)
 region = st.sidebar.selectbox("Destination Region", encoders['Order Region'].classes_)
 category = st.sidebar.selectbox("Product Category", encoders['Category Name'].classes_)
 days = st.sidebar.slider("Scheduled Days", 1, 14, 4)
 
+# --- 5. PREDICTION LOGIC ---
 if st.sidebar.button("Run Risk Analysis"):
-    # Prepare the input for the model
     input_df = pd.DataFrame({
         'Shipping Mode': [ship_mode],
         'Order Region': [region],
@@ -41,15 +47,14 @@ if st.sidebar.button("Run Risk Analysis"):
         'Days for shipment (scheduled)': [days]
     })
 
-    # Encode the text into numbers for the ML model
+    # Encode inputs
     for col in ['Shipping Mode', 'Order Region', 'Category Name']:
         input_df[col] = encoders[col].transform(input_df[col])
 
     # Get prediction
     prob = model.predict_proba(input_df)[0][1] * 100
 
-    # Display Results
-    st.subheader("Predictive Risk Assessment")
+    st.subheader("🔍 Predictive Risk Assessment")
     col1, col2 = st.columns([1, 2])
     
     with col1:
@@ -58,23 +63,17 @@ if st.sidebar.button("Run Risk Analysis"):
     with col2:
         if prob > 65:
             st.error("🚨 CRITICAL RISK: High likelihood of late delivery.")
-            st.write("**Strategy:** Optimize shipping mode or notify local distribution centers of expected lag.")
         elif prob > 35:
             st.warning("⚠️ MODERATE RISK: Potential for minor delays.")
         else:
             st.success("✅ LOW RISK: Optimized for on-time delivery.")
     
     st.progress(int(prob))
-else:
-    st.info("Select shipment details in the sidebar to begin.")
-    import matplotlib.pyplot as plt
-import seaborn as sns
 
-# Replace the old load_and_process_data with this:
-@st.cache_data
-def load_heatmap():
-    # This file is tiny and fast!
-    return pd.read_csv('heatmap_data.csv', index_col='Order Region')
+# --- 6. ANALYTICS SECTION (Always Visible) ---
+st.divider()
+st.subheader("📊 Global Risk Heatmap")
+st.write("Average delay percentages across regions and transport modes.")
 
 try:
     heatmap_data = load_heatmap()
@@ -83,4 +82,4 @@ try:
     plt.title("Regional Risk Analysis (%)")
     st.pyplot(fig)
 except Exception as e:
-    st.info("Analytics data is being updated...")
+    st.info("Heatmap data is loading or being updated... Please ensure 'heatmap_data.csv' is uploaded.")
