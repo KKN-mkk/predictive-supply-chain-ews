@@ -67,3 +67,34 @@ if st.sidebar.button("Run Risk Analysis"):
     st.progress(int(prob))
 else:
     st.info("Select shipment details in the sidebar to begin.")
+    import matplotlib.pyplot as plt
+import seaborn as sns
+
+# --- 5. ANALYTICS SECTION ---
+st.divider()
+st.header("📊 Global Risk Heatmap")
+st.markdown("This visualization identifies 'Danger Zones' where specific shipping modes face systemic delays.")
+
+@st.cache_data
+def load_and_process_data():
+    # Load the big dataset for the heatmap
+    raw_data = pd.read_csv('DataCoSupplyChainDataset.csv', encoding='ISO-8859-1')
+    # Create a Pivot Table: Average Delay Risk by Region and Shipping Mode
+    pivot_table = raw_data.pivot_table(
+        index='Order Region', 
+        columns='Shipping Mode', 
+        values='delivery status', 
+        aggfunc=lambda x: (x == 'Late delivery').mean() * 100
+    )
+    return pivot_table
+
+try:
+    with st.spinner('Generating global risk map...'):
+        heatmap_data = load_and_process_data()
+        
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.heatmap(heatmap_data, annot=True, fmt=".1f", cmap="YlOrRd", ax=ax)
+        plt.title("Delay Probability (%) by Region vs Mode")
+        st.pyplot(fig)
+except Exception as e:
+    st.warning("Heatmap could not be loaded. Ensure DataCoSupplyChainDataset.csv is in the folder.")
